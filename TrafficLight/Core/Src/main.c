@@ -22,7 +22,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "button.h"
+#include "traffic_light.h"
+#include "traffic_light_config.h"
+#include "scheduler.h"
+#include "software_timer.h"
+#include "fsm_automatic.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,13 +102,30 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  SCH_Init();
+  software_timer_init();
+  button_init(0U); /* Current button inputs are active-low. */
 
+  if (!traffic_init(traffic_light_codes)) Error_Handler();
+  if (!fsm_automatic_init(FSM_AUTOMATIC_DEFAULT_GREEN_MS,
+                          FSM_AUTOMATIC_DEFAULT_GREEN_MS,
+                          FSM_AUTOMATIC_DEFAULT_AMBER_MS)) {
+    Error_Handler();
+  }
+
+  if (SCH_Add_Task(button_scan, 1U, 1U) == 0U) Error_Handler();
+  if (SCH_Add_Task(software_timer_tick, 1U, 1U) == 0U) Error_Handler();
+  if (SCH_Add_Task(fsm_automatic_run, 1U, 1U) == 0U) Error_Handler();
+
+  if (!fsm_automatic_start()) Error_Handler();
+  if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) Error_Handler();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    SCH_Dispatch_Tasks();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -332,7 +354,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM2) {
+    SCH_Update();
+  }
+}
 /* USER CODE END 4 */
 
 /**
