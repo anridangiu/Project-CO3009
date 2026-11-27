@@ -57,6 +57,10 @@ bool traffic_set(unsigned road, LightColor color)
 
 LightColor traffic_get(unsigned road)
 {
-    if (!ready || road < 1U || road > 2U) return LIGHT_OFF;
-    return current[road - 1U];
+    if (!ready) return LIGHT_OFF;
+
+    if (road == 1U) return current[0];
+    if (road == 2U) return current[1];
+
+    return LIGHT_OFF;
 }

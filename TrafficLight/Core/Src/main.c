@@ -22,7 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "button.h"
+#include "traffic_light.h"
+#include "fsm_manual.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,6 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+/* Provisional: external inputs are configured with pull-ups. Verify on hardware. */
+#define BUTTON_ACTIVE_HIGH_MASK 0x00U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +51,12 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+static const uint8_t TL_CODES[2][LIGHT_COUNT] = {
+    /* OFF, RED, AMBER, GREEN */
+    {0, 3, 1, 2}, /* Road 1: D3-D4 */
+    {0, 3, 1, 2}  /* Road 2: D5-D6 */
+};
+static volatile uint8_t tick_10ms = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,7 +106,17 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-
+  /* Temporary standalone Manual Mode test (before scheduler integration). */
+  if (!traffic_init(TL_CODES)) {
+    Error_Handler();
+  }
+  button_init(BUTTON_ACTIVE_HIGH_MASK);
+  if (!fsm_manual_enter()) {
+    Error_Handler();
+  }
+  if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) {
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -107,6 +126,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (tick_10ms) {
+      tick_10ms = 0;
+      button_scan();
+      fsm_manual_run();
+    }
   }
   /* USER CODE END 3 */
 }
@@ -332,7 +356,11 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+/* TEMPORARY: replace the body with SCH_Update() when the scheduler is merged. */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM2) tick_10ms = 1;
+}
 /* USER CODE END 4 */
 
 /**
