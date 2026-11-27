@@ -75,3 +75,16 @@ bool software_timer_take_expired(uint8_t timer_id)
     timers[timer_id].expired = false;
     return expired;
 }
+
+uint32_t software_timer_get_remaining_ms(uint8_t timer_id)
+{
+    if (!timer_id_valid(timer_id) || !timers[timer_id].active) {
+        return 0U;
+    }
+
+    if (timers[timer_id].remaining_ticks > UINT32_MAX / SOFTWARE_TIMER_TICK_MS) {
+        return UINT32_MAX;
+    }
+
+    return timers[timer_id].remaining_ticks * SOFTWARE_TIMER_TICK_MS;
+}

@@ -18,5 +18,7 @@ void software_timer_tick(void);
 
 /* Returns and clears the one-shot expiration event. */
 bool software_timer_take_expired(uint8_t timer_id);
+/* Remaining duration for status displays; returns 0 for invalid/inactive timers. */
+uint32_t software_timer_get_remaining_ms(uint8_t timer_id);
 
 #endif

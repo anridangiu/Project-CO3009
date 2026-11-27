@@ -16,6 +16,7 @@ static const ButtonPin pins[BUTTON_COUNT] = {
 };
 
 typedef struct {
+    bool idle_high;            /* Input level sampled while button is released. */
     bool pressed;              /* debounced state */
     uint8_t different_samples; /* consecutive samples that differ from it */
     uint8_t held_ticks;        /* how long it has been pressed, saturates */
@@ -24,12 +25,14 @@ typedef struct {
 } ButtonState;
 
 static ButtonState buttons[BUTTON_COUNT];
-static uint8_t high_mask;
 
-void button_init(uint8_t active_high_mask)
+void button_init(void)
 {
-    high_mask = active_high_mask;
     memset(buttons, 0, sizeof(buttons));
+    for (unsigned i = 0; i < BUTTON_COUNT; ++i) {
+        buttons[i].idle_high =
+            (HAL_GPIO_ReadPin(pins[i].port, pins[i].pin) == GPIO_PIN_SET);
+    }
 }
 
 void button_scan(void)
@@ -37,7 +40,7 @@ void button_scan(void)
     for (unsigned i = 0; i < BUTTON_COUNT; ++i) {
         ButtonState *s = &buttons[i];
         bool high = HAL_GPIO_ReadPin(pins[i].port, pins[i].pin) == GPIO_PIN_SET;
-        bool pressed = high == ((high_mask & (1U << i)) != 0U);
+        bool pressed = high != s->idle_high;
         if (pressed != s->pressed) {
             /* Accept the new level only after it has been stable long enough. */
             if (++s->different_samples == BUTTON_DEBOUNCE_SAMPLES) {

@@ -4,14 +4,10 @@
 #include <stdint.h>
 #include "traffic_light.h"
 
-/*
- * TEMPORARY PLACEHOLDER: replace these two rows with the measured A/B codes
- * for OFF, RED, AMBER, GREEN before running the lights on the board.
- * Code bits: A is bit 1, B is bit 0.
- */
+/* Calibrated from the observed A/B output: OFF, RED, AMBER, GREEN. */
 static const uint8_t traffic_light_codes[2][LIGHT_COUNT] = {
-    {0U, 1U, 2U, 3U},
-    {0U, 1U, 2U, 3U}
+    {0U, 3U, 2U, 1U}, /* Road 1: D3-D4 */
+    {0U, 3U, 2U, 1U}  /* Road 2: D5-D6 */
 };
 
 #endif

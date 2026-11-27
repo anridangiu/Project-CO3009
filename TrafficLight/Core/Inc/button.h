@@ -9,8 +9,8 @@ typedef enum { BUTTON_1, BUTTON_2, BUTTON_3, BUTTON_4, BUTTON_USER, BUTTON_COUNT
 #define BUTTON_DEBOUNCE_SAMPLES 3U   /* 3 x 10 ms of a stable new level */
 #define BUTTON_LONG_PRESS_TICKS 100U /* held for 100 x 10 ms = 1 s */
 
-/* One bit per ButtonId. Set the bit if that input reads HIGH when pressed. */
-void button_init(uint8_t active_high_mask);
+/* Captures each released input level at startup, so either active polarity works. */
+void button_init(void);
 void button_scan(void); /* Schedule once per 10 ms. */
 /* Each event is reported once: the call returns it and clears it. */
 bool button_take_press(ButtonId id);

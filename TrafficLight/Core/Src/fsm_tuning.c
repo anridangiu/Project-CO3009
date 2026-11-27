@@ -1,28 +1,44 @@
 #include "fsm_tuning.h"
 #include "button.h"
 #include "lcd_i2c.h"
+#include "traffic_light.h"
 #include <stdio.h>
 
 /* Button allocation agreed for this FSM:
- * BUTTON_1    : select Red -> Yellow -> Green
+ * BUTTON_1    : select Red -> Amber -> Green
+ * BUTTON_2    : exit to Automatic (handled by main's mode controller)
  * BUTTON_3    : increase duration
  * BUTTON_4    : decrease duration
  * BUTTON_USER : confirm/save the edited duration
- * BUTTON_2 is reserved by fsm_manual for lane switching.
  */
 
 static TuningState tuning_state = TUNING_IDLE;
-static LightType_t selected_light = LIGHT_RED;
+static LightType_t selected_light = TIMING_LIGHT_RED;
 static uint16_t draft_duration = 0U;
 static bool display_dirty = true;
 static bool just_saved = false;
 
+static bool preview_selected_light(LightType_t light)
+{
+    switch (light) {
+        case TIMING_LIGHT_RED:
+            return traffic_set_pair(LIGHT_RED, LIGHT_RED);
+        case TIMING_LIGHT_YELLOW:
+            return traffic_set_pair(LIGHT_AMBER, LIGHT_AMBER);
+        case TIMING_LIGHT_GREEN:
+            /* Keep the intersection safe: preview green on road 1 only. */
+            return traffic_set_pair(LIGHT_GREEN, LIGHT_RED);
+        default:
+            return false;
+    }
+}
+
 static const char *light_name(LightType_t light)
 {
     switch (light) {
-        case LIGHT_RED:    return "RED";
-        case LIGHT_YELLOW: return "YELLOW";
-        case LIGHT_GREEN:  return "GREEN";
+        case TIMING_LIGHT_RED:    return "RED";
+        case TIMING_LIGHT_YELLOW: return "AMBER";
+        case TIMING_LIGHT_GREEN:  return "GREEN";
         default:           return "UNKNOWN";
     }
 }
@@ -45,11 +61,14 @@ static void display_active(void)
 
 bool fsm_tuning_enter(void)
 {
-    selected_light = LIGHT_RED;
+    selected_light = TIMING_LIGHT_RED;
     draft_duration = Global_GetLightDuration(selected_light);
     just_saved = false;
     display_dirty = true;
     button_flush();
+    if (!preview_selected_light(selected_light)) {
+        return false;
+    }
     tuning_state = TUNING_ACTIVE;
     return true;
 }
@@ -63,17 +82,21 @@ void fsm_tuning_run(void)
 
     if (tuning_state != TUNING_ACTIVE) return;
 
-    /* Consume each event once. BUTTON_2 belongs to Manual Mode. */
+    /* BUTTON_2 exits through the mode controller; BUTTON_1 selects here. */
     select_pressed = button_take_press(BUTTON_1);
     increase_pressed = button_take_press(BUTTON_3);
     decrease_pressed = button_take_press(BUTTON_4);
     confirm_pressed = button_take_press(BUTTON_USER);
 
     if (select_pressed) {
-        selected_light = (LightType_t)((selected_light + 1U) % LIGHT_COUNT);
-        draft_duration = Global_GetLightDuration(selected_light);
-        just_saved = false;
-        display_dirty = true;
+        LightType_t next_light =
+            (LightType_t)((selected_light + 1U) % TIMING_LIGHT_COUNT);
+        if (preview_selected_light(next_light)) {
+            selected_light = next_light;
+            draft_duration = Global_GetLightDuration(selected_light);
+            just_saved = false;
+            display_dirty = true;
+        }
     }
 
     if (increase_pressed) {

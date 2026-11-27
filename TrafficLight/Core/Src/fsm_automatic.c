@@ -2,10 +2,12 @@
 
 #include "software_timer.h"
 #include "traffic_light.h"
+#include <stddef.h>
 
 static uint32_t road1_green_ms;
 static uint32_t road2_green_ms;
 static uint32_t amber_ms;
+static uint32_t all_red_ms = FSM_AUTOMATIC_DEFAULT_ALL_RED_MS;
 static AutomaticState state = AUTO_STOPPED;
 static bool initialized;
 static bool active;
@@ -32,6 +34,16 @@ bool fsm_automatic_set_durations(uint32_t road1_ms,
     return true;
 }
 
+bool fsm_automatic_set_all_red_duration(uint32_t duration_ms)
+{
+    if (!duration_valid(duration_ms)) {
+        return false;
+    }
+
+    all_red_ms = duration_ms;
+    return true;
+}
+
 bool fsm_automatic_init(uint32_t road1_ms,
                         uint32_t road2_ms,
                         uint32_t amber_duration_ms)
@@ -39,6 +51,7 @@ bool fsm_automatic_init(uint32_t road1_ms,
     active = false;
     initialized = false;
     state = AUTO_STOPPED;
+    all_red_ms = FSM_AUTOMATIC_DEFAULT_ALL_RED_MS;
     software_timer_cancel(FSM_AUTOMATIC_TIMER_ID);
 
     if (!fsm_automatic_set_durations(road1_ms, road2_ms, amber_duration_ms)) {
@@ -96,13 +109,24 @@ void fsm_automatic_run(void)
         (void)enter_phase(AUTO_RED1_AMBER2, LIGHT_RED, LIGHT_AMBER, amber_ms);
         break;
     case AUTO_RED1_AMBER2:
-        (void)enter_phase(AUTO_GREEN1_RED2, LIGHT_GREEN, LIGHT_RED, road1_green_ms);
+        (void)enter_phase(AUTO_ALL_RED_AFTER_ROAD2,
+                          LIGHT_RED, LIGHT_RED, all_red_ms);
+        break;
+    case AUTO_ALL_RED_AFTER_ROAD2:
+        (void)enter_phase(AUTO_GREEN1_RED2,
+                          LIGHT_GREEN, LIGHT_RED, road1_green_ms);
         break;
     case AUTO_GREEN1_RED2:
-        (void)enter_phase(AUTO_AMBER1_RED2, LIGHT_AMBER, LIGHT_RED, amber_ms);
+        (void)enter_phase(AUTO_AMBER1_RED2,
+                          LIGHT_AMBER, LIGHT_RED, amber_ms);
         break;
     case AUTO_AMBER1_RED2:
-        (void)enter_phase(AUTO_RED1_GREEN2, LIGHT_RED, LIGHT_GREEN, road2_green_ms);
+        (void)enter_phase(AUTO_ALL_RED_AFTER_ROAD1,
+                          LIGHT_RED, LIGHT_RED, all_red_ms);
+        break;
+    case AUTO_ALL_RED_AFTER_ROAD1:
+        (void)enter_phase(AUTO_RED1_GREEN2,
+                          LIGHT_RED, LIGHT_GREEN, road2_green_ms);
         break;
     default:
         fsm_automatic_stop();
@@ -126,4 +150,48 @@ bool fsm_automatic_is_active(void)
 AutomaticState fsm_automatic_state(void)
 {
     return state;
+}
+
+void fsm_automatic_get_road_remaining_ms(uint32_t *road1_ms,
+                                         uint32_t *road2_ms)
+{
+    uint32_t phase_ms = active
+                      ? software_timer_get_remaining_ms(FSM_AUTOMATIC_TIMER_ID)
+                      : 0U;
+
+    if (road1_ms == NULL || road2_ms == NULL) {
+        return;
+    }
+
+    *road1_ms = 0U;
+    *road2_ms = 0U;
+
+    switch (state) {
+    case AUTO_RED1_GREEN2:
+        *road1_ms = phase_ms + amber_ms + all_red_ms;
+        *road2_ms = phase_ms;
+        break;
+    case AUTO_RED1_AMBER2:
+        *road1_ms = phase_ms + all_red_ms;
+        *road2_ms = phase_ms;
+        break;
+    case AUTO_ALL_RED_AFTER_ROAD2:
+        *road1_ms = phase_ms;
+        *road2_ms = phase_ms + road1_green_ms + amber_ms + all_red_ms;
+        break;
+    case AUTO_GREEN1_RED2:
+        *road1_ms = phase_ms;
+        *road2_ms = phase_ms + amber_ms + all_red_ms;
+        break;
+    case AUTO_AMBER1_RED2:
+        *road1_ms = phase_ms;
+        *road2_ms = phase_ms + all_red_ms;
+        break;
+    case AUTO_ALL_RED_AFTER_ROAD1:
+        *road1_ms = phase_ms + road2_green_ms + amber_ms + all_red_ms;
+        *road2_ms = phase_ms;
+        break;
+    default:
+        break;
+    }
 }

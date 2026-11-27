@@ -16,13 +16,15 @@
 
 typedef enum
 {
-    LIGHT_RED = 0,
-    LIGHT_YELLOW,
-    LIGHT_GREEN,
-    LIGHT_COUNT
+    TIMING_LIGHT_RED = 0,
+    TIMING_LIGHT_YELLOW,
+    TIMING_LIGHT_GREEN,
+    TIMING_LIGHT_COUNT
 } LightType_t;
 
-/* Shared configured durations (seconds). */
+/* Shared configured durations in seconds. RED means the both-directions-red
+ * clearance interval; each road's full red time also includes the other
+ * road's green and yellow phases. */
 extern volatile uint16_t redDuration;
 extern volatile uint16_t yellowDuration;
 extern volatile uint16_t greenDuration;

@@ -3,7 +3,12 @@
 #include "traffic_light.h"
 
 typedef enum {
-    MAN_R1_G2, MAN_R1_A2, MAN_G1_R2, MAN_A1_R2, MAN_COUNT
+    MAN_R1_G2,
+    MAN_R1_A2,
+    MAN_G1_R2,
+    MAN_A1_R2,
+    MAN_ALL_AMBER,
+    MAN_COUNT
 } ManualPhase;
 
 static const LightColor lights[MAN_COUNT][2] = {
@@ -11,6 +16,7 @@ static const LightColor lights[MAN_COUNT][2] = {
     [MAN_R1_A2] = {LIGHT_RED,   LIGHT_AMBER},
     [MAN_G1_R2] = {LIGHT_GREEN, LIGHT_RED},
     [MAN_A1_R2] = {LIGHT_AMBER, LIGHT_RED},
+    [MAN_ALL_AMBER] = {LIGHT_AMBER, LIGHT_AMBER},
 };
 
 static bool active;
