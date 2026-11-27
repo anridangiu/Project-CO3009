@@ -24,6 +24,10 @@
 /* USER CODE BEGIN Includes */
 #include "button.h"
 #include "traffic_light.h"
+#include "traffic_light_config.h"
+#include "scheduler.h"
+#include "software_timer.h"
+#include "fsm_automatic.h"
 #include "fsm_manual.h"
 /* USER CODE END Includes */
 
@@ -56,7 +60,7 @@ static const uint8_t TL_CODES[2][LIGHT_COUNT] = {
     {0, 3, 1, 2}, /* Road 1: D3-D4 */
     {0, 3, 1, 2}  /* Road 2: D5-D6 */
 };
-static volatile uint8_t tick_10ms = 0U;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +75,38 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void mode_task(void)
+{
+    static bool manual_mode = false;
+
+    if (button_take_press(BUTTON_1)) {
+        button_flush();
+
+        if (!manual_mode) {
+            fsm_automatic_stop();
+
+            if (!fsm_manual_enter())
+                Error_Handler();
+
+            manual_mode = true;
+        } else {
+            fsm_manual_exit();
+
+            if (!fsm_automatic_start())
+                Error_Handler();
+
+            manual_mode = false;
+        }
+
+        return;
+    }
+
+    if (manual_mode) {
+        fsm_manual_run();
+    } else {
+        fsm_automatic_run();
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -106,31 +142,34 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  /* Temporary standalone Manual Mode test (before scheduler integration). */
-  if (!traffic_init(TL_CODES)) {
+  SCH_Init();
+  software_timer_init();
+  button_init(BUTTON_ACTIVE_HIGH_MASK); /* Current button inputs are active-low. */
+
+  if (!traffic_init(TL_CODES)) Error_Handler();
+  if (!fsm_automatic_init(FSM_AUTOMATIC_DEFAULT_GREEN_MS,
+                          FSM_AUTOMATIC_DEFAULT_GREEN_MS,
+                          FSM_AUTOMATIC_DEFAULT_AMBER_MS)) {
     Error_Handler();
   }
-  button_init(BUTTON_ACTIVE_HIGH_MASK);
-  if (!fsm_manual_enter()) {
-    Error_Handler();
-  }
-  if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) {
-    Error_Handler();
-  }
+
+  if (SCH_Add_Task(button_scan, 1U, 1U) == 0U) Error_Handler();
+  if (SCH_Add_Task(software_timer_tick, 1U, 1U) == 0U) Error_Handler();
+  if (SCH_Add_Task(mode_task, 1U, 1U) == 0U) Error_Handler();
+
+  if (!fsm_automatic_start()) Error_Handler();
+  if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) Error_Handler();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    SCH_Dispatch_Tasks();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if (tick_10ms) {
-      tick_10ms = 0;
-      button_scan();
-      fsm_manual_run();
-    }
+   
   }
   /* USER CODE END 3 */
 }
@@ -356,10 +395,11 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/* TEMPORARY: replace the body with SCH_Update() when the scheduler is merged. */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    if (htim->Instance == TIM2) tick_10ms = 1;
+  if (htim->Instance == TIM2) {
+    SCH_Update();
+  }
 }
 /* USER CODE END 4 */
 
