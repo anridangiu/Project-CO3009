@@ -28,6 +28,7 @@
 #include "scheduler.h"
 #include "software_timer.h"
 #include "fsm_automatic.h"
+#include "fsm_manual.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,6 +38,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+/* Provisional: external inputs are configured with pull-ups. Verify on hardware. */
+#define BUTTON_ACTIVE_HIGH_MASK 0x00U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,6 +55,11 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+static const uint8_t TL_CODES[2][LIGHT_COUNT] = {
+    /* OFF, RED, AMBER, GREEN */
+    {0, 3, 1, 2}, /* Road 1: D3-D4 */
+    {0, 3, 1, 2}  /* Road 2: D5-D6 */
+};
 
 /* USER CODE END PV */
 
@@ -67,6 +75,38 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void mode_task(void)
+{
+    static bool manual_mode = false;
+
+    if (button_take_press(BUTTON_1)) {
+        button_flush();
+
+        if (!manual_mode) {
+            fsm_automatic_stop();
+
+            if (!fsm_manual_enter())
+                Error_Handler();
+
+            manual_mode = true;
+        } else {
+            fsm_manual_exit();
+
+            if (!fsm_automatic_start())
+                Error_Handler();
+
+            manual_mode = false;
+        }
+
+        return;
+    }
+
+    if (manual_mode) {
+        fsm_manual_run();
+    } else {
+        fsm_automatic_run();
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -104,9 +144,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
   SCH_Init();
   software_timer_init();
-  button_init(0U); /* Current button inputs are active-low. */
+  button_init(BUTTON_ACTIVE_HIGH_MASK); /* Current button inputs are active-low. */
 
-  if (!traffic_init(traffic_light_codes)) Error_Handler();
+  if (!traffic_init(TL_CODES)) Error_Handler();
   if (!fsm_automatic_init(FSM_AUTOMATIC_DEFAULT_GREEN_MS,
                           FSM_AUTOMATIC_DEFAULT_GREEN_MS,
                           FSM_AUTOMATIC_DEFAULT_AMBER_MS)) {
@@ -115,7 +155,7 @@ int main(void)
 
   if (SCH_Add_Task(button_scan, 1U, 1U) == 0U) Error_Handler();
   if (SCH_Add_Task(software_timer_tick, 1U, 1U) == 0U) Error_Handler();
-  if (SCH_Add_Task(fsm_automatic_run, 1U, 1U) == 0U) Error_Handler();
+  if (SCH_Add_Task(mode_task, 1U, 1U) == 0U) Error_Handler();
 
   if (!fsm_automatic_start()) Error_Handler();
   if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK) Error_Handler();
@@ -129,6 +169,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+   
   }
   /* USER CODE END 3 */
 }
